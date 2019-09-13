@@ -57,12 +57,12 @@ class BigQueryDataset:
         data = json.loads(gzip.decompress(row.payload).decode("utf-8"))
         # add `meta` fields for backwards compatibility
         data["meta"] = {
-            "submissionDate": datetime.strftime(row.submission_timestamp, "%Y-%m-%d"),
+            "submissionDate": datetime.strftime(row.submission_timestamp, "%Y%m%d"),
             "sampleId": row.sample_id,
         }
         return data
 
-    def load(self, project_id, doc_type, submission_date, filter_clause, fraction=1):
+    def load(self, project_id, doc_type, submission_date, channels=None, filter_clause=None, fraction=1):
 
         start = self._date_add(submission_date, 0)
         end = self._date_add(submission_date, 1)
@@ -70,6 +70,15 @@ class BigQueryDataset:
         date_clause = "submission_timestamp >= '{start}' AND submission_timestamp < '{end}'".format(
             start=start, end=end
         )
+
+        filters = [date_clause]
+        if channels:
+            # build up a clause like "(normalized_channel = 'nightly' OR normalized_channel = 'beta')"
+            clauses = ["normalized_channel = '{}'".format(channel) for channel in channels]
+            joined = "({})".format(" OR ".join(clauses))
+            filters.append(filters)
+        if filter_clause:
+            filters.append(filters)
 
         df = (
             self.spark.read.format("bigquery")
@@ -80,12 +89,7 @@ class BigQueryDataset:
                     project_id=project_id, doc_type=doc_type
                 ),
             )
-            .option(
-                "filter",
-                "{date_clause} AND {filter_clause}".format(
-                    date_clause=date_clause, filter_clause=filter_clause
-                ),
-            )
+            .option("filter", " AND ".join(filters))
             .load()
         )
 

@@ -23,8 +23,10 @@ def entry_point():
 @click.option("--credentials-bucket", type=str, required=True)
 @click.option("--credentials-prefix", type=str, required=True)
 @click.option("--num-partitions", type=int, default=10000)
+@click.option("--source", type=click.Option(["bigquery", "moztelemetry"]), default="moztelemetry")
+@click.option("--project-id", type="str", default="moz-fx-data-shared-prod")
 def run_aggregator(
-    date, channels, credentials_bucket, credentials_prefix, num_partitions
+    date, channels, credentials_bucket, credentials_prefix, num_partitions, source, project_id
 ):
 
     # Mozaggregator expects a series of POSTGRES_* variables in order to connect
@@ -43,7 +45,7 @@ def run_aggregator(
     channels = [channel.strip() for channel in channels.split(",")]
     print("Running job for {}".format(date))
     aggregates = aggregator.aggregate_metrics(
-        spark.sparkContext, channels, date, num_reducers=num_partitions
+        spark.sparkContext, channels, date, num_reducers=num_partitions, source=source, project_id=project_id
     )
     print("Number of build-id aggregates: {}".format(aggregates[0].count()))
     print("Number of submission date aggregates: {}".format(aggregates[1].count()))
