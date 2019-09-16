@@ -1,11 +1,15 @@
+import gzip
 import json
 import logging
+import os
+from datetime import datetime
 
 import pyspark
 import pytest
+from click.testing import CliRunner
+from google.cloud import bigquery
 
 import boto3
-from click.testing import CliRunner
 from dataset import (DATE_FMT, SUBMISSION_DATE_1, generate_pings,
                      ping_dimensions)
 from moto import mock_s3
@@ -172,6 +176,83 @@ def test_aggregation_cli(tmp_path, monkeypatch, spark):
             prefix,
             "--num-partitions",
             10,
+        ],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 0
+    test_aggregate_histograms()
+
+
+def format_payload_bytes_decoded(ping):
+    return  json.dumps({
+        "normalized_app_name": ping["application"]["name"],
+        "normalized_channel": ping["application"]["channel"],
+        "normalized_os": ping["environment"]["system"]["os"],
+        "sample_id": ping["meta"]["sampleId"],
+        "submission_timestamp": datetime.timstamp(
+            datetime.strptime(ping["meta"]["submission_date"], "%Y%m%d")),
+        "payload": gzip.compress(json.dumps(ping))
+    })
+
+
+@pytest.fixture()
+def bq_client():
+    return bigquery.Client()
+
+
+
+@pytest.fixture()
+def bq_testing_dataset(bq_client):
+    project_id = os.environ.get("PROJECT_ID", "")
+    dataset_id = f"{project_id}.pytest_mozaggregator_test"
+    bq_client.delete_dataset(dataset_id, delete_contents=True, not_found_ok=True)
+
+    table_id = f"{dataset_id}.telemetry__main_v4"
+    # TODO: create table with appropriate schema
+
+    bq_client.delete_dataset(dataset_id, delete_contents=True, not_found_ok=True)
+
+
+@mock_s3
+def test_aggregation_cli_bigquery(tmp_path, monkeypatch, spark):
+    if not (os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") and os.environ.get("PROJECT_ID")):
+        pytest.skip("missing credentials for testing on GCP")
+
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "access")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "secret")
+
+    bucket = "test_bucket"
+    prefix = "test_prefix"
+
+    s3 = boto3.resource("s3")
+    s3.create_bucket(Bucket=bucket)
+
+    test_creds = str(tmp_path / "creds")
+    # generally points to the production credentials
+    creds = {"DB_TEST_URL": "dbname=postgres user=postgres host=db"}
+    with open(test_creds, "w") as f:
+        json.dump(creds, f)
+    s3.Bucket(bucket).upload_file(str(test_creds), prefix)
+
+
+    result = CliRunner().invoke(
+        run_aggregator,
+        [
+            "--date",
+            "20190901",
+            "--channels",
+            "nightly,beta",
+            "--credentials-bucket",
+            bucket,
+            "--credentials-prefix",
+            prefix,
+            "--num-partitions",
+            10,
+            "--source",
+            "bigquery",
+            "--project-id",
+            os.environ["PROJECT_ID"]
         ],
         catch_exceptions=False,
     )

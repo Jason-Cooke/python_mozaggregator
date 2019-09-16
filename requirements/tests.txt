@@ -10,3 +10,4 @@ testfixtures==6.3.0
 pytest
 pytest-cov
 moto==1.3.9
+google-cloud-bigquery

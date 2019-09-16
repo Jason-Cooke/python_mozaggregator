@@ -1,4 +1,6 @@
 import json
+import gzip
+
 from datetime import datetime, timedelta
 
 from pyspark.sql import Row, SparkSession
@@ -62,7 +64,15 @@ class BigQueryDataset:
         }
         return data
 
-    def load(self, project_id, doc_type, submission_date, channels=None, filter_clause=None, fraction=1):
+    def load(
+        self,
+        project_id,
+        doc_type,
+        submission_date,
+        channels=None,
+        filter_clause=None,
+        fraction=1,
+    ):
 
         start = self._date_add(submission_date, 0)
         end = self._date_add(submission_date, 1)
@@ -74,7 +84,9 @@ class BigQueryDataset:
         filters = [date_clause]
         if channels:
             # build up a clause like "(normalized_channel = 'nightly' OR normalized_channel = 'beta')"
-            clauses = ["normalized_channel = '{}'".format(channel) for channel in channels]
+            clauses = [
+                "normalized_channel = '{}'".format(channel) for channel in channels
+            ]
             joined = "({})".format(" OR ".join(clauses))
             filters.append(filters)
         if filter_clause:
