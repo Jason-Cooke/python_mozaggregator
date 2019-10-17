@@ -67,6 +67,7 @@ class BigQueryDataset:
     def load(
         self,
         project_id,
+        dataset_id,
         doc_type,
         submission_date,
         channels=None,
@@ -88,17 +89,17 @@ class BigQueryDataset:
                 "normalized_channel = '{}'".format(channel) for channel in channels
             ]
             joined = "({})".format(" OR ".join(clauses))
-            filters.append(filters)
+            filters.append(joined)
         if filter_clause:
-            filters.append(filters)
+            filters.append(filter_clause)
 
         df = (
             self.spark.read.format("bigquery")
             # Assumes the namespace is telemetry and the version is v4
             .option(
                 "table",
-                "{project_id}.payload_bytes_decoded.telemetry_telemetry__{doc_type}_v4".format(
-                    project_id=project_id, doc_type=doc_type
+                "{project_id}.{dataset_id}.telemetry_telemetry__{doc_type}_v4".format(
+                    project_id=project_id, dataset_id=dataset_id, doc_type=doc_type
                 ),
             )
             .option("filter", " AND ".join(filters))

@@ -1,15 +1,16 @@
-import gzip
 import json
 import logging
 import os
+import zlib
 from datetime import datetime
 
+import boto3
+import pandas as pd
 import pyspark
-import pytest
 from click.testing import CliRunner
 from google.cloud import bigquery
 
-import boto3
+import pytest
 from dataset import (DATE_FMT, SUBMISSION_DATE_1, generate_pings,
                      ping_dimensions)
 from moto import mock_s3
@@ -185,40 +186,54 @@ def test_aggregation_cli(tmp_path, monkeypatch, spark):
 
 
 def format_payload_bytes_decoded(ping):
-    return  json.dumps({
+    # fields are created in tests/dataset.py
+    return {
         "normalized_app_name": ping["application"]["name"],
         "normalized_channel": ping["application"]["channel"],
-        "normalized_os": ping["environment"]["system"]["os"],
+        "normalized_os": ping["environment"]["system"]["os"]["name"],
         "sample_id": ping["meta"]["sampleId"],
-        "submission_timestamp": datetime.timstamp(
-            datetime.strptime(ping["meta"]["submission_date"], "%Y%m%d")),
-        "payload": gzip.compress(json.dumps(ping))
-    })
+        "submission_timestamp": int(datetime.strptime(ping["meta"]["submissionDate"], "%Y%m%d").strftime("%s"))*10**6,
+        "payload": zlib.compress(json.dumps(ping))
+    }
 
 
-@pytest.fixture()
-def bq_client():
-    return bigquery.Client()
+def bigquery_testing_enabled():
+    return os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") and os.environ.get("PROJECT_ID")
 
 
+@pytest.mark.skipif(not bigquery_testing_enabled(), reason="requires valid gcp credentials and project id")
+@pytest.fixture
+def bq_testing_table():
+    bigquery.Client()
 
-@pytest.fixture()
-def bq_testing_dataset(bq_client):
-    project_id = os.environ.get("PROJECT_ID", "")
-    dataset_id = f"{project_id}.pytest_mozaggregator_test"
+    project_id = os.environ["PROJECT_ID"]
+    dataset_id = "{project_id}.pytest_mozaggregator_test".format(project_id=project_id)
+    bq_client.delete_dataset(dataset_id, delete_contents=True, not_found_ok=True)
+    bq_client.create_dataset(dataset_id)
+
+    schema = bq_client.schema_from_json(os.path.join(os.path.dirname(__file__), "decoded.1.bq"))
+    # create the main and saved-session tables
+    main_table_id = "{dataset_id}.telemetry_telemetry__main_v4".format(dataset_id=dataset_id)
+    main_table = bq_client.create_table(bigquery.table.Table(main_table_id, schema))
+    saved_session_table_id = "{dataset_id}.telemetry_telemetry__saved_session_v4".format(dataset_id=dataset_id)
+    saved_session_table = bq_client.create_table(bigquery.table.Table(saved_session_table_id, schema))
+
+    # use load_table instead of insert_rows to avoid eventual consistency guarantees
+    df = pd.DataFrame([
+        format_payload_bytes_decoded(ping) for ping in generate_pings()
+    ])
+
+    bq_client.load_table_from_dataframe(df, main_table).result()
+    bq_client.load_table_from_dataframe(df, saved_session_table).result()
+
+    yield
+
     bq_client.delete_dataset(dataset_id, delete_contents=True, not_found_ok=True)
 
-    table_id = f"{dataset_id}.telemetry__main_v4"
-    # TODO: create table with appropriate schema
 
-    bq_client.delete_dataset(dataset_id, delete_contents=True, not_found_ok=True)
-
-
+@pytest.mark.skipif(not bigquery_testing_enabled(), reason="requires valid gcp credentials and project id")
 @mock_s3
-def test_aggregation_cli_bigquery(tmp_path, monkeypatch, spark):
-    if not (os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") and os.environ.get("PROJECT_ID")):
-        pytest.skip("missing credentials for testing on GCP")
-
+def test_aggregation_cli_bigquery(tmp_path, monkeypatch, spark, bq_testing_table):
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "access")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "secret")
 
@@ -252,7 +267,9 @@ def test_aggregation_cli_bigquery(tmp_path, monkeypatch, spark):
             "--source",
             "bigquery",
             "--project-id",
-            os.environ["PROJECT_ID"]
+            os.environ["PROJECT_ID"],
+            "--dataset-id",
+            "pytest_mozaggregator_test"
         ],
         catch_exceptions=False,
     )

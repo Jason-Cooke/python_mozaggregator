@@ -45,6 +45,7 @@ def aggregate_metrics(
     num_reducers=10000,
     source="moztelemetry",
     project_id=None,
+    dataset_id="payload_bytes_decoded",
     ):
     """ Returns the build-id and submission date aggregates for a given submission date.
 
@@ -60,6 +61,7 @@ def aggregate_metrics(
         dataset = BigQueryDataset()
         pings = dataset.load(
             project_id,
+            dataset_id,
             "main",
             submission_date,
             channels,
@@ -67,6 +69,7 @@ def aggregate_metrics(
         )
         fennec_pings = dataset.load(
             project_id,
+            dataset_id,
             "saved_session",
             submission_date,
             channels,
