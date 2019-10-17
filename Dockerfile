@@ -39,6 +39,8 @@ RUN pip install --upgrade pip && \
 ENV PYSPARK_PYTHON=python \
     SPARK_HOME=/usr/local/lib/python2.7/site-packages/pyspark
 
+RUN wget --directory-prefix $SPARK_HOME/jars/ https://storage.googleapis.com/spark-lib/bigquery/spark-bigquery-latest.jar
+
 # Switch back to home directory
 WORKDIR /app
 
