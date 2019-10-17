@@ -23,8 +23,8 @@ def entry_point():
 @click.option("--credentials-bucket", type=str, required=True)
 @click.option("--credentials-prefix", type=str, required=True)
 @click.option("--num-partitions", type=int, default=10000)
-@click.option("--source", type=click.Option(["bigquery", "moztelemetry"]), default="moztelemetry")
-@click.option("--project-id", envvar="PROJECT_ID", type="str", default="moz-fx-data-shared-prod")
+@click.option("--source", type=click.Choice(["bigquery", "moztelemetry"]), default="moztelemetry")
+@click.option("--project-id", envvar="PROJECT_ID", type=str, default="moz-fx-data-shared-prod")
 def run_aggregator(
     date, channels, credentials_bucket, credentials_prefix, num_partitions, source, project_id
 ):
