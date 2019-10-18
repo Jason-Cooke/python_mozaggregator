@@ -20,3 +20,4 @@ services:
       - ${GOOGLE_APPLICATION_CREDENTIALS}:/app/.credentials
     environment:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/.credentials
+      - PROJECT_ID

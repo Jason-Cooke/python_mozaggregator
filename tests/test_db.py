@@ -204,7 +204,7 @@ def bigquery_testing_enabled():
 @pytest.mark.skipif(not bigquery_testing_enabled(), reason="requires valid gcp credentials and project id")
 @pytest.fixture
 def bq_testing_table():
-    bigquery.Client()
+    bq_client = bigquery.Client()
 
     project_id = os.environ["PROJECT_ID"]
     dataset_id = "{project_id}.pytest_mozaggregator_test".format(project_id=project_id)
