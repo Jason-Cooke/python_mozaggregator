@@ -14,7 +14,7 @@ from mozaggregator.cli import run_aggregator
 from mozaggregator.db import (NoticeLoggingCursor, _create_connection,
                               submit_aggregates)
 from testfixtures import LogCapture
-from utils import bigquery_testing_enabled
+from utils import runif_bigquery_testing_enabled
 
 SERVICE_URI = "http://localhost:5000"
 
@@ -181,7 +181,7 @@ def test_aggregation_cli(tmp_path, monkeypatch, spark):
     test_aggregate_histograms()
 
 
-@pytest.mark.skipif(not bigquery_testing_enabled(), reason="requires valid gcp credentials and project id")
+@runif_bigquery_testing_enabled
 @mock_s3
 def test_aggregation_cli_bigquery(tmp_path, monkeypatch, spark, bq_testing_table):
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "access")

@@ -6,7 +6,7 @@ from pyspark.sql import SparkSession
 
 import pytest
 from dataset import generate_pings
-from utils import bigquery_testing_enabled, format_payload_bytes_decoded
+from utils import runif_bigquery_testing_enabled, format_payload_bytes_decoded
 
 
 @pytest.fixture()
@@ -22,10 +22,7 @@ def sc(spark):
     return spark.sparkContext
 
 
-@pytest.mark.skipif(
-    not bigquery_testing_enabled(),
-    reason="requires valid gcp credentials and project id",
-)
+@runif_bigquery_testing_enabled
 @pytest.fixture
 def bq_testing_table():
     bq_client = bigquery.Client()

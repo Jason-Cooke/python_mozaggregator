@@ -1,7 +1,7 @@
-import os
-from datetime import datetime
-import zlib
 import json
+import os
+import zlib
+from datetime import datetime
 
 
 def format_payload_bytes_decoded(ping):
@@ -19,7 +19,20 @@ def format_payload_bytes_decoded(ping):
     }
 
 
-def bigquery_testing_enabled():
-    return os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") and os.environ.get(
-        "PROJECT_ID"
-    )
+def runif_bigquery_testing_enabled(func):
+    """A decorator that will skip the test if the current environment is not set up for running tests.
+
+        @runif_bigquery_testing_enabled
+        def test_my_function_that_uses_bigquery_spark_connector(table_fixture):
+            ...
+    """
+    # importing this at module scope will break test discoverability
+    import pytest
+
+    bigquery_testing_enabled = os.environ.get(
+        "GOOGLE_APPLICATION_CREDENTIALS"
+    ) and os.environ.get("PROJECT_ID")
+    return pytest.mark.skipif(
+        not bigquery_testing_enabled,
+        reason="requires valid gcp credentials and project id",
+    )(func)
