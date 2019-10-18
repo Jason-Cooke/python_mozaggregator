@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import zlib
@@ -11,11 +12,32 @@ def format_payload_bytes_decoded(ping):
         "normalized_channel": ping["application"]["channel"],
         "normalized_os": ping["environment"]["system"]["os"]["name"],
         "sample_id": ping["meta"]["sampleId"],
-        "submission_timestamp": int(
-            datetime.strptime(ping["meta"]["submissionDate"], "%Y%m%d").strftime("%s")
-        )
-        * 10 ** 6,
-        "payload": zlib.compress(json.dumps(ping)),
+        "submission_timestamp": datetime.strptime(
+            ping["meta"]["submissionDate"], "%Y%m%d"
+        ).strftime("%Y-%m-%d %H:%M:%S"),
+        "payload": base64.b64encode(zlib.compress(json.dumps(ping))),
+    }
+
+
+def format_payload_bytes_decoded_mobile(ping):
+    """Format the mobile payload, this requires less meta information than the
+    normal dataset because there is little to no filtering being done in the job.
+
+    Fields are created in tests/mobile_dataset.py.
+    """
+    return {
+        "submission_timestamp": datetime.strptime(
+            ping["meta"]["submissionDate"], "%Y%m%d"
+        ).strftime("%Y-%m-%d %H:%M:%S"),
+        "normalized_channel": ping["meta"]["normalizedChannel"],
+        "metadata": {
+            "uri": {
+                "app_version": str(ping["meta"]["appVersion"]),
+                "app_build_id": ping["meta"]["appBuildId"],
+                "app_name": ping["meta"]["appName"],
+            }
+        },
+        "payload": base64.b64encode(zlib.compress(json.dumps(ping))),
     }
 
 

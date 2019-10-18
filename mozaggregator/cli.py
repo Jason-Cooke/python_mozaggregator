@@ -101,12 +101,24 @@ def run_parquet(date, channels, output, num_partitions):
     ),
 )
 @click.option("--num-partitions", type=int, default=10000)
-def run_mobile(date, output, num_partitions):
+@click.option(
+    "--source", type=click.Choice(["bigquery", "moztelemetry"]), default="moztelemetry"
+)
+@click.option(
+    "--project-id", envvar="PROJECT_ID", type=str, default="moz-fx-data-shared-prod"
+)
+@click.option("--dataset-id", type=str, default="payload_bytes_decoded")
+def run_mobile(date, output, num_partitions, source, project_id, dataset_id):
     spark = SparkSession.builder.getOrCreate()
 
     print("Running job for {}".format(date))
     agg_metrics = mobile.aggregate_metrics(
-        spark.sparkContext, date, num_partitions=num_partitions
+        spark.sparkContext,
+        date,
+        num_partitions=num_partitions,
+        source=source,
+        project_id=project_id,
+        dataset_id=dataset_id,
     )
     aggs = mobile.get_aggregates_dataframe(spark, agg_metrics)
     mobile.write_parquet(aggs, output)

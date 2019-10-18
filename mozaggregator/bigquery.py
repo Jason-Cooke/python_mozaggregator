@@ -1,5 +1,5 @@
 import json
-import gzip
+import zlib
 
 from datetime import datetime, timedelta
 
@@ -56,11 +56,16 @@ class BigQueryDataset:
             |-- sample_id: long (nullable = true)
             |-- submission_timestamp: timestamp (nullable = true)
         """
-        data = json.loads(gzip.decompress(row.payload).decode("utf-8"))
+        data = json.loads(zlib.decompress(bytes(row.payload), 15 + 32))
         # add `meta` fields for backwards compatibility
         data["meta"] = {
             "submissionDate": datetime.strftime(row.submission_timestamp, "%Y%m%d"),
             "sampleId": row.sample_id,
+            # following 4 fields necessary for mobile_aggregates
+            "normalizedChannel": row.normalized_channel,
+            "appVersion": row.metadata.uri.app_version,
+            "appBuildId": row.metadata.uri.app_build_id,
+            "appName": row.metadata.uri.app_name,
         }
         return data
 

@@ -225,4 +225,5 @@ def test_aggregation_cli_bigquery(tmp_path, monkeypatch, spark, bq_testing_table
     )
 
     assert result.exit_code == 0
+    # TODO: a better test for verifying whether data was written into the database
     test_aggregate_histograms()
