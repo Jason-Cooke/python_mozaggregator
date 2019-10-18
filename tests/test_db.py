@@ -1,14 +1,9 @@
 import json
 import logging
 import os
-import zlib
-from datetime import datetime
 
 import boto3
-import pandas as pd
-import pyspark
 from click.testing import CliRunner
-from google.cloud import bigquery
 
 import pytest
 from dataset import (DATE_FMT, SUBMISSION_DATE_1, generate_pings,
@@ -19,6 +14,7 @@ from mozaggregator.cli import run_aggregator
 from mozaggregator.db import (NoticeLoggingCursor, _create_connection,
                               submit_aggregates)
 from testfixtures import LogCapture
+from utils import bigquery_testing_enabled
 
 SERVICE_URI = "http://localhost:5000"
 
@@ -183,52 +179,6 @@ def test_aggregation_cli(tmp_path, monkeypatch, spark):
 
     assert result.exit_code == 0
     test_aggregate_histograms()
-
-
-def format_payload_bytes_decoded(ping):
-    # fields are created in tests/dataset.py
-    return {
-        "normalized_app_name": ping["application"]["name"],
-        "normalized_channel": ping["application"]["channel"],
-        "normalized_os": ping["environment"]["system"]["os"]["name"],
-        "sample_id": ping["meta"]["sampleId"],
-        "submission_timestamp": int(datetime.strptime(ping["meta"]["submissionDate"], "%Y%m%d").strftime("%s"))*10**6,
-        "payload": zlib.compress(json.dumps(ping))
-    }
-
-
-def bigquery_testing_enabled():
-    return os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") and os.environ.get("PROJECT_ID")
-
-
-@pytest.mark.skipif(not bigquery_testing_enabled(), reason="requires valid gcp credentials and project id")
-@pytest.fixture
-def bq_testing_table():
-    bq_client = bigquery.Client()
-
-    project_id = os.environ["PROJECT_ID"]
-    dataset_id = "{project_id}.pytest_mozaggregator_test".format(project_id=project_id)
-    bq_client.delete_dataset(dataset_id, delete_contents=True, not_found_ok=True)
-    bq_client.create_dataset(dataset_id)
-
-    schema = bq_client.schema_from_json(os.path.join(os.path.dirname(__file__), "decoded.1.bq"))
-    # create the main and saved-session tables
-    main_table_id = "{dataset_id}.telemetry_telemetry__main_v4".format(dataset_id=dataset_id)
-    main_table = bq_client.create_table(bigquery.table.Table(main_table_id, schema))
-    saved_session_table_id = "{dataset_id}.telemetry_telemetry__saved_session_v4".format(dataset_id=dataset_id)
-    saved_session_table = bq_client.create_table(bigquery.table.Table(saved_session_table_id, schema))
-
-    # use load_table instead of insert_rows to avoid eventual consistency guarantees
-    df = pd.DataFrame([
-        format_payload_bytes_decoded(ping) for ping in generate_pings()
-    ])
-
-    bq_client.load_table_from_dataframe(df, main_table).result()
-    bq_client.load_table_from_dataframe(df, saved_session_table).result()
-
-    yield
-
-    bq_client.delete_dataset(dataset_id, delete_contents=True, not_found_ok=True)
 
 
 @pytest.mark.skipif(not bigquery_testing_enabled(), reason="requires valid gcp credentials and project id")
